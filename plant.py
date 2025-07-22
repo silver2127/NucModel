@@ -1,5 +1,6 @@
 import numpy as np
 import numpy_financial as npf
+import pandas as pd
 
 def calculate_npv(net_cash_flows, discount_rate):
     """
@@ -77,6 +78,53 @@ def calculate_discounted_payback_period(net_cash_flows, discount_rate):
         if cumulative >= 0:
             return t
     return None
+
+
+def simulate_plant_operation(prices: pd.DataFrame,
+                             capacity_mw: float,
+                             fuel_cost_per_mwh: float,
+                             maintenance_days: int = 30,
+                             capacity_factor: float = 0.9):
+    """Simulate operating a plant and selling energy.
+
+    Parameters
+    ----------
+    prices : pandas.DataFrame
+        Hourly price data with ``timestamp`` and ``price`` columns.
+    capacity_mw : float
+        Nameplate capacity of the plant in MW.
+    fuel_cost_per_mwh : float
+        Fuel cost per MWh of electricity produced.
+    maintenance_days : int, optional
+        Number of maintenance days each year where the plant is offline.
+    capacity_factor : float, optional
+        Operational capacity factor outside of maintenance periods.
+
+    Returns
+    -------
+    tuple
+        Total profit and a DataFrame of the simulation results.
+    """
+
+    if prices.empty:
+        raise ValueError("Price data required for simulation")
+
+    df = prices.copy().sort_values("timestamp").reset_index(drop=True)
+    df["energy_mwh"] = capacity_mw * capacity_factor
+
+    if maintenance_days > 0:
+        downtime_hours = int(maintenance_days * 24)
+        for year in df["timestamp"].dt.year.unique():
+            idx = df.index[df["timestamp"].dt.year == year]
+            downtime = idx[:downtime_hours]
+            df.loc[downtime, "energy_mwh"] = 0.0
+
+    df["revenue"] = df["price"] * df["energy_mwh"]
+    df["fuel_cost"] = fuel_cost_per_mwh * df["energy_mwh"]
+    df["profit"] = df["revenue"] - df["fuel_cost"]
+
+    total_profit = df["profit"].sum()
+    return total_profit, df
 
 # --- Main execution block with an example scenario ---
 if __name__ == '__main__':
@@ -185,3 +233,20 @@ if __name__ == '__main__':
         print(f"Discounted Payback Period: {payback} years")
     else:
         print("Discounted payback period was not reached within the project life.")
+
+    # --- 4. Simulate Plant Operation ---
+    print("\n--- Operational Simulation ---")
+    hours = 365 * 24
+    timestamps = pd.date_range("2024-01-01", periods=hours, freq="H")
+    price_df = pd.DataFrame({"timestamp": timestamps,
+                             "price": ELECTRICITY_PRICE_USD_PER_MWH})
+
+    fuel_cost = 8.0  # $/MWh
+    profit, _ = simulate_plant_operation(
+        price_df,
+        capacity_mw=PLANT_CAPACITY_MW,
+        fuel_cost_per_mwh=fuel_cost,
+        maintenance_days=30,
+        capacity_factor=CAPACITY_FACTOR,
+    )
+    print(f"Simulated annual profit: ${profit:,.2f}")

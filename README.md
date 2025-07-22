@@ -32,3 +32,23 @@ prices_daily = fetch_daily_prices(region="NY", years=3, api_key="YOUR_KEY")
 next_day = forecast_next_day_seasonal(prices_daily)
 print("Seasonal forecast:", next_day)
 ```
+
+## Plant operation simulation
+
+`plant.py` includes a `simulate_plant_operation` function for modeling plant
+profitability against hourly price data. The function accounts for scheduled
+maintenance downtime, fuel costs, and the plant's capacity factor.
+
+Example:
+
+```python
+import pandas as pd
+from plant import simulate_plant_operation
+
+timestamps = pd.date_range("2024-01-01", periods=48, freq="H")
+prices = pd.DataFrame({"timestamp": timestamps, "price": 50.0})
+profit, results = simulate_plant_operation(prices, capacity_mw=1000,
+                                           fuel_cost_per_mwh=10,
+                                           maintenance_days=1)
+print("Profit:", profit)
+```
