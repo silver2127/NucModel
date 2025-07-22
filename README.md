@@ -11,9 +11,13 @@ Run `python create_secrets.py` to create the `secrets.json` file interactively. 
 Example:
 
 ```python
-from price_utils import fetch_recent_prices, forecast_next_hour
+from price_utils import fetch_recent_prices, forecast_next_hour, forecast_arima
 
 prices = fetch_recent_prices(region="NY", hours=24, api_key="YOUR_KEY")
 next_hour = forecast_next_hour(prices)
 print("Forecasted price:", next_hour)
+
+# Forecast using an ARIMA model with automatic parameter tuning
+next_hour_arima = forecast_arima(prices)
+print("ARIMA forecast:", next_hour_arima)
 ```
