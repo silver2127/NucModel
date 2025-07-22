@@ -37,7 +37,9 @@ print("Seasonal forecast:", next_day)
 
 `plant.py` includes a `simulate_plant_operation` function for modeling plant
 profitability against hourly price data. The function accounts for scheduled
-maintenance downtime, fuel costs, and the plant's capacity factor.
+maintenance downtime, fuel costs, and the plant's capacity factor. Fuel costs
+can be specified either directly in dollars per MWh or as a total cost per
+refueling cycle, which is then converted to a per-MWh value.
 
 Example:
 
@@ -51,6 +53,16 @@ profit, results = simulate_plant_operation(prices, capacity_mw=1000,
                                            fuel_cost_per_mwh=10,
                                            maintenance_days=1)
 print("Profit:", profit)
+```
+
+Fuel cost can also be provided per refueling cycle:
+
+```python
+refuel_cost = 10 * 1000 * 24 * 18 * 30  # equivalent to $10/MWh for a cycle
+profit, _ = simulate_plant_operation(prices, capacity_mw=1000,
+                                     fuel_cost_per_mwh=None,
+                                     fuel_cost_per_refueling=refuel_cost,
+                                     maintenance_days=1)
 ```
 
 An example set of plant parameters is provided in `example_plant.json`. Running
