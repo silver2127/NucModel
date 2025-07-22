@@ -1,4 +1,5 @@
 import numpy as np
+import numpy_financial as npf
 
 def calculate_npv(net_cash_flows, discount_rate):
     """
@@ -64,6 +65,19 @@ def calculate_lcoe(investment_costs, operation_costs, energy_production, discoun
     lcoe = total_discounted_costs / total_discounted_energy
     return lcoe
 
+def calculate_irr(net_cash_flows):
+    """Return the Internal Rate of Return (IRR) for given cash flows."""
+    return npf.irr(net_cash_flows)
+
+def calculate_discounted_payback_period(net_cash_flows, discount_rate):
+    """Return the discounted payback period in years or None if never recovered."""
+    cumulative = 0.0
+    for t, ncf in enumerate(net_cash_flows):
+        cumulative += ncf / ((1 + discount_rate) ** t)
+        if cumulative >= 0:
+            return t
+    return None
+
 # --- Main execution block with an example scenario ---
 if __name__ == '__main__':
     print("--- Financial Model for a Hypothetical Nuclear Power Plant ---")
@@ -80,8 +94,9 @@ if __name__ == '__main__':
     OVERNIGHT_COST_USD_MILLION = 6000 
     ANNUAL_INVESTMENT = OVERNIGHT_COST_USD_MILLION / CONSTRUCTION_PERIOD_YEARS
     
-    ANNUAL_OPERATION_COST_USD_MILLION = 150 # Includes fuel, maintenance, etc.
-    DECOMMISSIONING_COST_USD_MILLION = 900 # Treated as a final operational cost
+    ANNUAL_OPERATION_COST_USD_MILLION = 150  # Includes fuel, maintenance, etc.
+    OP_COST_INFLATION = 0.02  # 2% annual escalation of operating costs
+    DECOMMISSIONING_COST_USD_MILLION = 900  # Treated as a final operational cost
     RESIDUAL_VALUE_USD_MILLION = 0 # Assuming no value at the end of life
 
     # Plant capacity and output
@@ -95,21 +110,29 @@ if __name__ == '__main__':
     # Investment costs (I_t)
     investment_schedule = [ANNUAL_INVESTMENT] * CONSTRUCTION_PERIOD_YEARS + [0] * OPERATIONAL_LIFE_YEARS
     
-    # Operational costs (K_t)
-    op_cost_schedule = [0] * CONSTRUCTION_PERIOD_YEARS + [ANNUAL_OPERATION_COST_USD_MILLION] * OPERATIONAL_LIFE_YEARS
+    # Operational costs (K_t) with escalation
+    op_cost_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
+    current_cost = ANNUAL_OPERATION_COST_USD_MILLION
+    for _ in range(OPERATIONAL_LIFE_YEARS):
+        op_cost_schedule.append(current_cost)
+        current_cost *= (1 + OP_COST_INFLATION)
     # Add decommissioning cost to the final year
     op_cost_schedule[-1] += DECOMMISSIONING_COST_USD_MILLION
 
     # Energy production (A_t)
-    energy_schedule = [0] * CONSTRUCTION_PERIOD_YEARS + [ANNUAL_ENERGY_PRODUCTION_MWH] * OPERATIONAL_LIFE_YEARS
+    energy_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
+    current_energy = ANNUAL_ENERGY_PRODUCTION_MWH
+    for _ in range(OPERATIONAL_LIFE_YEARS):
+        energy_schedule.append(current_energy)
+        current_energy *= 0.999  # 0.1% degradation per year
 
     # Net Cash Flow (NCF_t) for NPV calculation
     # For simplicity, we'll estimate revenue to see if the project is profitable at a certain electricity price.
     # Let's test a hypothetical electricity price of $95/MWh
     ELECTRICITY_PRICE_USD_PER_MWH = 95
-    annual_revenue_million = (ANNUAL_ENERGY_PRODUCTION_MWH * ELECTRICITY_PRICE_USD_PER_MWH) / 1_000_000
-    
-    revenue_schedule = [0] * CONSTRUCTION_PERIOD_YEARS + [annual_revenue_million] * OPERATIONAL_LIFE_YEARS
+    revenue_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
+    for energy in energy_schedule[CONSTRUCTION_PERIOD_YEARS:]:
+        revenue_schedule.append((energy * ELECTRICITY_PRICE_USD_PER_MWH) / 1_000_000)
     
     # NCF = Revenues - (Investments + Operational Costs)
     net_cash_flow_schedule = np.array(revenue_schedule) - (np.array(investment_schedule) + np.array(op_cost_schedule))
@@ -147,3 +170,16 @@ if __name__ == '__main__':
         print("The project is financially viable under these assumptions, as the NPV is positive.")
     else:
         print("The project is not financially viable under these assumptions, as the NPV is negative.")
+
+    # Calculate IRR
+    irr_result = calculate_irr(net_cash_flow_schedule)
+    if irr_result is not None:
+        print(f"Internal Rate of Return (IRR): {irr_result:.2%}")
+    else:
+        print("IRR could not be calculated.")
+
+    payback = calculate_discounted_payback_period(net_cash_flow_schedule, DISCOUNT_RATE)
+    if payback is not None:
+        print(f"Discounted Payback Period: {payback} years")
+    else:
+        print("Discounted payback period was not reached within the project life.")
