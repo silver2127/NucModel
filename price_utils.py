@@ -1,4 +1,6 @@
 import os
+import json
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -26,8 +28,19 @@ def fetch_recent_prices(region: str, hours: int = 24, api_key: Optional[str] = N
     """
     if api_key is None:
         api_key = os.getenv("EIA_API_KEY")
+        if not api_key:
+            secrets_path = Path(__file__).resolve().parent / "secrets.json"
+            if secrets_path.exists():
+                try:
+                    with open(secrets_path, "r", encoding="utf-8") as f:
+                        secrets = json.load(f)
+                        api_key = secrets.get("EIA_API_KEY")
+                except Exception:
+                    pass
     if not api_key:
-        raise ValueError("An EIA API key is required. Set EIA_API_KEY env variable or pass api_key argument.")
+        raise ValueError(
+            "An EIA API key is required. Set EIA_API_KEY env variable, pass api_key argument, or create secrets.json."
+        )
 
     end = datetime.utcnow()
     start = end - timedelta(hours=hours)
