@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import numpy_financial as npf
 import pandas as pd
@@ -126,127 +129,124 @@ def simulate_plant_operation(prices: pd.DataFrame,
     total_profit = df["profit"].sum()
     return total_profit, df
 
-# --- Main execution block with an example scenario ---
-if __name__ == '__main__':
-    print("--- Financial Model for a Hypothetical Nuclear Power Plant ---")
 
-    # --- 1. Define Project Parameters ---
-    # These parameters are for a hypothetical plant and can be changed.
-    CONSTRUCTION_PERIOD_YEARS = 8
-    OPERATIONAL_LIFE_YEARS = 40
-    TOTAL_LIFE_CYCLE_YEARS = CONSTRUCTION_PERIOD_YEARS + OPERATIONAL_LIFE_YEARS
-    
-    DISCOUNT_RATE = 0.08  # 8% discount rate
+def load_parameters(path: str) -> dict:
+    """Load plant parameters from a JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    # Costs are in millions of USD
-    OVERNIGHT_COST_USD_MILLION = 6000 
-    ANNUAL_INVESTMENT = OVERNIGHT_COST_USD_MILLION / CONSTRUCTION_PERIOD_YEARS
-    
-    ANNUAL_OPERATION_COST_USD_MILLION = 150  # Includes fuel, maintenance, etc.
-    OP_COST_INFLATION = 0.02  # 2% annual escalation of operating costs
-    DECOMMISSIONING_COST_USD_MILLION = 900  # Treated as a final operational cost
-    RESIDUAL_VALUE_USD_MILLION = 0 # Assuming no value at the end of life
 
-    # Plant capacity and output
-    PLANT_CAPACITY_MW = 1200
-    CAPACITY_FACTOR = 0.90 # 90% availability
-    ANNUAL_ENERGY_PRODUCTION_MWH = PLANT_CAPACITY_MW * 24 * 365 * CAPACITY_FACTOR
+def run_example(params: dict) -> None:
+    """Execute the financial model using provided parameters and print results."""
 
-    # --- 2. Prepare Data Arrays based on the formulas ---
-    # The arrays represent the full life-cycle of the plant year by year.
-    
-    # Investment costs (I_t)
-    investment_schedule = [ANNUAL_INVESTMENT] * CONSTRUCTION_PERIOD_YEARS + [0] * OPERATIONAL_LIFE_YEARS
-    
-    # Operational costs (K_t) with escalation
-    op_cost_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
-    current_cost = ANNUAL_OPERATION_COST_USD_MILLION
-    for _ in range(OPERATIONAL_LIFE_YEARS):
+    construction_years = params["construction_period_years"]
+    operational_years = params["operational_life_years"]
+    total_years = construction_years + operational_years
+    discount_rate = params["discount_rate"]
+
+    overnight_cost = params["overnight_cost_usd_million"]
+    annual_investment = overnight_cost / construction_years
+
+    annual_op_cost = params["annual_operation_cost_usd_million"]
+    op_cost_inflation = params["op_cost_inflation"]
+    decommissioning = params["decommissioning_cost_usd_million"]
+    residual_value = params["residual_value_usd_million"]
+
+    capacity_mw = params["plant_capacity_mw"]
+    capacity_factor = params["capacity_factor"]
+    electricity_price = params["electricity_price_usd_per_mwh"]
+
+    annual_energy = capacity_mw * 24 * 365 * capacity_factor
+
+    investment_schedule = [annual_investment] * construction_years + [0] * operational_years
+
+    op_cost_schedule = [0] * construction_years
+    current_cost = annual_op_cost
+    for _ in range(operational_years):
         op_cost_schedule.append(current_cost)
-        current_cost *= (1 + OP_COST_INFLATION)
-    # Add decommissioning cost to the final year
-    op_cost_schedule[-1] += DECOMMISSIONING_COST_USD_MILLION
+        current_cost *= 1 + op_cost_inflation
+    op_cost_schedule[-1] += decommissioning
 
-    # Energy production (A_t)
-    energy_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
-    current_energy = ANNUAL_ENERGY_PRODUCTION_MWH
-    for _ in range(OPERATIONAL_LIFE_YEARS):
+    energy_schedule = [0] * construction_years
+    current_energy = annual_energy
+    for _ in range(operational_years):
         energy_schedule.append(current_energy)
-        current_energy *= 0.999  # 0.1% degradation per year
+        current_energy *= 0.999
 
-    # Net Cash Flow (NCF_t) for NPV calculation
-    # For simplicity, we'll estimate revenue to see if the project is profitable at a certain electricity price.
-    # Let's test a hypothetical electricity price of $95/MWh
-    ELECTRICITY_PRICE_USD_PER_MWH = 95
-    revenue_schedule = [0] * CONSTRUCTION_PERIOD_YEARS
-    for energy in energy_schedule[CONSTRUCTION_PERIOD_YEARS:]:
-        revenue_schedule.append((energy * ELECTRICITY_PRICE_USD_PER_MWH) / 1_000_000)
-    
-    # NCF = Revenues - (Investments + Operational Costs)
-    net_cash_flow_schedule = np.array(revenue_schedule) - (np.array(investment_schedule) + np.array(op_cost_schedule))
+    revenue_schedule = [0] * construction_years
+    for energy in energy_schedule[construction_years:]:
+        revenue_schedule.append((energy * electricity_price) / 1_000_000)
 
-    # --- 3. Run Calculations and Display Results ---
-    
-    # Calculate LCOE
+    net_cash_flows = np.array(revenue_schedule) - (
+        np.array(investment_schedule) + np.array(op_cost_schedule)
+    )
+
     lcoe_result = calculate_lcoe(
         investment_costs=investment_schedule,
         operation_costs=op_cost_schedule,
         energy_production=energy_schedule,
-        discount_rate=DISCOUNT_RATE,
-        residual_value=RESIDUAL_VALUE_USD_MILLION
+        discount_rate=discount_rate,
+        residual_value=residual_value,
     )
-    
-    print(f"\nProject Parameters:")
-    print(f"  - Discount Rate: {DISCOUNT_RATE:.1%}")
-    print(f"  - Total Lifecycle: {TOTAL_LIFE_CYCLE_YEARS} years ({CONSTRUCTION_PERIOD_YEARS} construction + {OPERATIONAL_LIFE_YEARS} operation)")
-    print(f"  - Total Investment: ${OVERNIGHT_COST_USD_MILLION:,.0f} Million")
-    print(f"  - Annual Energy Output: {ANNUAL_ENERGY_PRODUCTION_MWH:,.0f} MWh")
+
+    print("\nProject Parameters:")
+    print(f"  - Discount Rate: {discount_rate:.1%}")
+    print(
+        f"  - Total Lifecycle: {total_years} years ({construction_years} construction + {operational_years} operation)"
+    )
+    print(f"  - Total Investment: ${overnight_cost:,.0f} Million")
+    print(f"  - Annual Energy Output: {annual_energy:,.0f} MWh")
 
     print("\n--- Model Results ---")
-    # Convert from millions of dollars to dollars per MWh for readability
     lcoe_dollars = lcoe_result * 1_000_000
     print(f"Levelized Cost of Energy (LCOE): ${lcoe_dollars:,.2f} per MWh")
     print("\nThis LCOE represents the minimum average price at which electricity must be sold")
     print("for the project to break even over its lifetime (i.e., achieve an NPV of zero).")
 
-    # Calculate NPV
-    npv_result = calculate_npv(
-        net_cash_flows=net_cash_flow_schedule,
-        discount_rate=DISCOUNT_RATE
+    npv_result = calculate_npv(net_cash_flows, discount_rate)
+    print(
+        f"\nNet Present Value (NPV) at a fixed price of ${electricity_price}/MWh: ${npv_result:,.2f} Million"
     )
-
-    print(f"\nNet Present Value (NPV) at a fixed price of ${ELECTRICITY_PRICE_USD_PER_MWH}/MWh: ${npv_result:,.2f} Million")
     if npv_result > 0:
         print("The project is financially viable under these assumptions, as the NPV is positive.")
     else:
         print("The project is not financially viable under these assumptions, as the NPV is negative.")
 
-    # Calculate IRR
-    irr_result = calculate_irr(net_cash_flow_schedule)
+    irr_result = calculate_irr(net_cash_flows)
     if irr_result is not None:
         print(f"Internal Rate of Return (IRR): {irr_result:.2%}")
     else:
         print("IRR could not be calculated.")
 
-    payback = calculate_discounted_payback_period(net_cash_flow_schedule, DISCOUNT_RATE)
+    payback = calculate_discounted_payback_period(net_cash_flows, discount_rate)
     if payback is not None:
         print(f"Discounted Payback Period: {payback} years")
     else:
         print("Discounted payback period was not reached within the project life.")
 
-    # --- 4. Simulate Plant Operation ---
     print("\n--- Operational Simulation ---")
     hours = 365 * 24
     timestamps = pd.date_range("2024-01-01", periods=hours, freq="H")
-    price_df = pd.DataFrame({"timestamp": timestamps,
-                             "price": ELECTRICITY_PRICE_USD_PER_MWH})
+    price_df = pd.DataFrame({"timestamp": timestamps, "price": electricity_price})
 
-    fuel_cost = 8.0  # $/MWh
+    fuel_cost = params.get("fuel_cost_per_mwh", 0)
+    maintenance_days = params.get("maintenance_days", 30)
     profit, _ = simulate_plant_operation(
         price_df,
-        capacity_mw=PLANT_CAPACITY_MW,
+        capacity_mw=capacity_mw,
         fuel_cost_per_mwh=fuel_cost,
-        maintenance_days=30,
-        capacity_factor=CAPACITY_FACTOR,
+        maintenance_days=maintenance_days,
+        capacity_factor=capacity_factor,
     )
     print(f"Simulated annual profit: ${profit:,.2f}")
+
+# --- Main execution block with an example scenario ---
+def main() -> None:
+    params_path = Path(__file__).resolve().parent / "example_plant.json"
+    params = load_parameters(params_path)
+    print("--- Financial Model for a Hypothetical Nuclear Power Plant ---")
+    run_example(params)
+
+
+if __name__ == "__main__":
+    main()
