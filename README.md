@@ -67,4 +67,12 @@ profit, _ = simulate_plant_operation(prices, capacity_mw=1000,
 
 An example set of plant parameters is provided in `example_plant.json`. Running
 `python plant.py` will load this file and execute a full financial calculation
-using those values.
+using those values. Additional templates are available in the `plant_templates`
+directory. Specify one with the `--params` flag:
+
+```bash
+python plant.py --params plant_templates/vogtle.json
+```
+
+Current templates include `vogtle.json`, `generic_pwr_1970s.json`, and
+`generic_smr.json` for comparing different plant designs.
