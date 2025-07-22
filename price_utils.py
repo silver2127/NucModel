@@ -6,6 +6,7 @@ from typing import Optional
 
 import pandas as pd
 import requests
+from statsmodels.tsa.arima.model import ARIMA
 
 
 def fetch_recent_prices(region: str, hours: int = 24, api_key: Optional[str] = None) -> pd.DataFrame:
@@ -81,3 +82,55 @@ def forecast_next_hour(prices: pd.DataFrame, window: int = 24) -> float:
     if prices.empty:
         raise ValueError("No price data available for forecasting")
     return prices["price"].tail(window).mean()
+
+
+def forecast_arima(prices: pd.DataFrame, order: Optional[tuple] = None) -> float:
+    """Forecast the next hour's price using an ARIMA model.
+
+    Parameters
+    ----------
+    prices : pandas.DataFrame
+        DataFrame produced by :func:`fetch_recent_prices`.
+    order : tuple, optional
+        (p, d, q) order of the ARIMA model. If not provided, a small grid search
+        is performed to choose a reasonable order based on AIC.
+
+    Returns
+    -------
+    float
+        Forecasted price for the next hour.
+    """
+    if prices.empty:
+        raise ValueError("No price data available for forecasting")
+
+    series = prices["price"].astype(float)
+
+    if order is None:
+        best_aic = float("inf")
+        best_order = (1, 0, 0)
+        p_range = range(0, 3)
+        d_range = range(0, 2)
+        q_range = range(0, 3)
+        for p in p_range:
+            for d in d_range:
+                for q in q_range:
+                    if p == d == q == 0:
+                        continue
+                    try:
+                        model = ARIMA(series, order=(p, d, q),
+                                      enforce_stationarity=False,
+                                      enforce_invertibility=False)
+                        res = model.fit()
+                        if res.aic < best_aic:
+                            best_aic = res.aic
+                            best_order = (p, d, q)
+                    except Exception:
+                        continue
+        order = best_order
+
+    model = ARIMA(series, order=order,
+                  enforce_stationarity=False,
+                  enforce_invertibility=False)
+    res = model.fit()
+    forecast = res.forecast(steps=1)
+    return float(forecast.iloc[0])
