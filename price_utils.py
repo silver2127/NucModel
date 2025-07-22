@@ -216,3 +216,48 @@ def forecast_next_day_seasonal(prices: pd.DataFrame) -> float:
     if next_day in day_means.index:
         return float(day_means.loc[next_day])
     return float(df["price"].mean())
+
+
+def backcast(
+    prices: pd.DataFrame,
+    forecast_func,
+    *,
+    window: int = 24,
+) -> pd.DataFrame:
+    """Evaluate a forecasting function using backcasting.
+
+    Parameters
+    ----------
+    prices : pandas.DataFrame
+        Price history with ``timestamp`` and ``price`` columns.
+    forecast_func : callable
+        Function that takes a ``pandas.DataFrame`` and returns a forecasted
+        price. Typically one of the forecast utilities in this module.
+    window : int, optional
+        Number of rows of historical data to use for each forecast. Defaults to
+        24.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing ``timestamp``, ``actual``, ``predicted`` and
+        ``error`` columns for each backcast step.
+    """
+
+    if len(prices) <= window:
+        raise ValueError("Not enough data for backcasting")
+
+    records = []
+    for i in range(window, len(prices)):
+        history = prices.iloc[i - window : i]
+        predicted = float(forecast_func(history))
+        actual = float(prices["price"].iloc[i])
+        ts = prices["timestamp"].iloc[i]
+        records.append({
+            "timestamp": ts,
+            "actual": actual,
+            "predicted": predicted,
+            "error": actual - predicted,
+        })
+
+    return pd.DataFrame(records)
