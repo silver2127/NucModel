@@ -83,12 +83,17 @@ def calculate_discounted_payback_period(net_cash_flows, discount_rate):
     return None
 
 
-def simulate_plant_operation(prices: pd.DataFrame,
-                             capacity_mw: float,
-                             fuel_cost_per_mwh: float,
-                             maintenance_days: int = 30,
-                             capacity_factor: float = 0.9,
-                             maintenance_interval_months: int = 12):
+def simulate_plant_operation(
+    prices: pd.DataFrame,
+    capacity_mw: float,
+    fuel_cost_per_mwh: float | None = None,
+    maintenance_days: int = 30,
+    capacity_factor: float = 0.9,
+    maintenance_interval_months: int = 12,
+    *,
+    fuel_cost_per_refueling: float | None = None,
+    refueling_cycle_months: int = 18,
+):
     """Simulate operating a plant and selling energy.
 
     Parameters
@@ -97,13 +102,20 @@ def simulate_plant_operation(prices: pd.DataFrame,
         Hourly price data with ``timestamp`` and ``price`` columns.
     capacity_mw : float
         Nameplate capacity of the plant in MW.
-    fuel_cost_per_mwh : float
-        Fuel cost per MWh of electricity produced.
+    fuel_cost_per_mwh : float, optional
+        Fuel cost per MWh of electricity produced. If ``None`` and
+        ``fuel_cost_per_refueling`` is provided, this value is
+        calculated automatically.
     maintenance_days : int, optional
         Number of maintenance days for each maintenance outage.
     maintenance_interval_months : int, optional
         How often maintenance outages occur, in months. Defaults to 12
         (once per year).
+    fuel_cost_per_refueling : float, optional
+        Total cost of one refueling cycle. If provided, it will be
+        converted to a per-MWh cost based on ``refueling_cycle_months``.
+    refueling_cycle_months : int, optional
+        Length of a fuel cycle in months. Defaults to 18 months.
     capacity_factor : float, optional
         Operational capacity factor outside of maintenance periods.
 
@@ -115,6 +127,14 @@ def simulate_plant_operation(prices: pd.DataFrame,
 
     if prices.empty:
         raise ValueError("Price data required for simulation")
+
+    if fuel_cost_per_mwh is None:
+        if fuel_cost_per_refueling is None:
+            fuel_cost_per_mwh = 0.0
+        else:
+            hours_per_cycle = refueling_cycle_months * 30 * 24
+            energy_per_cycle = capacity_mw * capacity_factor * hours_per_cycle
+            fuel_cost_per_mwh = fuel_cost_per_refueling / energy_per_cycle
 
     df = prices.copy().sort_values("timestamp").reset_index(drop=True)
     df["energy_mwh"] = capacity_mw * capacity_factor
@@ -180,8 +200,17 @@ def run_example(params: dict) -> None:
     timestamps = pd.date_range("2024-01-01", periods=hours, freq="H")
     price_df = pd.DataFrame({"timestamp": timestamps, "price": electricity_price})
 
-    fuel_cost = params.get("fuel_cost_per_mwh", 0)
+    fuel_cost = params.get("fuel_cost_per_mwh")
+    fuel_per_refueling = params.get("fuel_cost_per_refueling")
+    refuel_months = params.get("refueling_cycle_months", 18)
     maintenance_days = params.get("maintenance_days", 30)
+
+    if fuel_cost is None and fuel_per_refueling is not None:
+        hours_per_cycle = refuel_months * 30 * 24
+        cycle_energy = capacity_mw * capacity_factor * hours_per_cycle
+        fuel_cost = fuel_per_refueling / cycle_energy
+    elif fuel_cost is None:
+        fuel_cost = 0.0
 
     _, op_df = simulate_plant_operation(
         price_df,
