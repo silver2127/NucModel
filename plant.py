@@ -155,7 +155,9 @@ if __name__ == '__main__':
     print(f"  - Annual Energy Output: {ANNUAL_ENERGY_PRODUCTION_MWH:,.0f} MWh")
 
     print("\n--- Model Results ---")
-    print(f"Levelized Cost of Energy (LCOE): ${lcoe_result:,.2f} per MWh")
+    # Convert from millions of dollars to dollars per MWh for readability
+    lcoe_dollars = lcoe_result * 1_000_000
+    print(f"Levelized Cost of Energy (LCOE): ${lcoe_dollars:,.2f} per MWh")
     print("\nThis LCOE represents the minimum average price at which electricity must be sold")
     print("for the project to break even over its lifetime (i.e., achieve an NPV of zero).")
 
