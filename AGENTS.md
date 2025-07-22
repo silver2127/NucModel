@@ -1,9 +1,9 @@
-# AGENTS Instructions
+# Repository Guidelines
 
-This repository contains a simple financial model of a nuclear power plant.
+This project hosts a lightweight financial model of a nuclear power plant. When updating the Python code, please follow these steps to keep the model working:
 
-When modifying Python code in this repository:
+1. Run `python -m py_compile plant.py` to confirm the main script compiles.
+2. Execute `python plant.py` to ensure the default calculation runs.
+3. Run the unit tests with `pytest` for extra validation.
 
-- Always run `python -m py_compile plant.py` after changes to ensure the script compiles.
-- Then run `python plant.py` to verify the script executes without errors.
-
+See the README for more details on usage and development practices.

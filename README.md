@@ -1,6 +1,12 @@
 # NucModel
 
-Nuclear Power Plant Financial Model maker
+Simple financial model and data utilities for nuclear power plants.
+
+## Getting Started
+
+1. Install dependencies: `pip install pandas numpy numpy-financial statsmodels requests pytest`.
+2. Run `python create_secrets.py` or set `EIA_API_KEY` to configure API access.
+3. Execute `python plant.py` to perform a full financial calculation.
 
 ## Power price utilities
 
@@ -73,5 +79,13 @@ directory. Specify one with the `--params` flag:
 ```bash
 python plant.py --params plant_templates/vogtle.json
 ```
+
+## Development Notes
+
+When contributing code:
+
+1. Run `python -m py_compile plant.py` to ensure the main script compiles.
+2. Execute `python plant.py` to verify the example parameters still work.
+3. Run `pytest` to execute the test suite.
 
 
