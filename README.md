@@ -52,3 +52,7 @@ profit, results = simulate_plant_operation(prices, capacity_mw=1000,
                                            maintenance_days=1)
 print("Profit:", profit)
 ```
+
+An example set of plant parameters is provided in `example_plant.json`. Running
+`python plant.py` will load this file and execute a full financial calculation
+using those values.
