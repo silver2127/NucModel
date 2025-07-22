@@ -87,7 +87,8 @@ def simulate_plant_operation(prices: pd.DataFrame,
                              capacity_mw: float,
                              fuel_cost_per_mwh: float,
                              maintenance_days: int = 30,
-                             capacity_factor: float = 0.9):
+                             capacity_factor: float = 0.9,
+                             maintenance_interval_months: int = 12):
     """Simulate operating a plant and selling energy.
 
     Parameters
@@ -99,7 +100,10 @@ def simulate_plant_operation(prices: pd.DataFrame,
     fuel_cost_per_mwh : float
         Fuel cost per MWh of electricity produced.
     maintenance_days : int, optional
-        Number of maintenance days each year where the plant is offline.
+        Number of maintenance days for each maintenance outage.
+    maintenance_interval_months : int, optional
+        How often maintenance outages occur, in months. Defaults to 12
+        (once per year).
     capacity_factor : float, optional
         Operational capacity factor outside of maintenance periods.
 
@@ -117,10 +121,16 @@ def simulate_plant_operation(prices: pd.DataFrame,
 
     if maintenance_days > 0:
         downtime_hours = int(maintenance_days * 24)
-        for year in df["timestamp"].dt.year.unique():
-            idx = df.index[df["timestamp"].dt.year == year]
-            downtime = idx[:downtime_hours]
-            df.loc[downtime, "energy_mwh"] = 0.0
+        start = df["timestamp"].iloc[0]
+        end_time = df["timestamp"].iloc[-1]
+        while start <= end_time:
+            mask = (
+                (df["timestamp"] >= start)
+                & (df["timestamp"] < start + pd.Timedelta(days=maintenance_days))
+            )
+            downtime_idx = df.index[mask][:downtime_hours]
+            df.loc[downtime_idx, "energy_mwh"] = 0.0
+            start += pd.DateOffset(months=maintenance_interval_months)
 
     df["revenue"] = df["price"] * df["energy_mwh"]
     df["fuel_cost"] = fuel_cost_per_mwh * df["energy_mwh"]
@@ -156,8 +166,6 @@ def run_example(params: dict) -> None:
     capacity_factor = params["capacity_factor"]
     electricity_price = params["electricity_price_usd_per_mwh"]
 
-    annual_energy = capacity_mw * 24 * 365 * capacity_factor
-
     investment_schedule = [annual_investment] * construction_years + [0] * operational_years
 
     op_cost_schedule = [0] * construction_years
@@ -167,15 +175,34 @@ def run_example(params: dict) -> None:
         current_cost *= 1 + op_cost_inflation
     op_cost_schedule[-1] += decommissioning
 
-    energy_schedule = [0] * construction_years
-    current_energy = annual_energy
-    for _ in range(operational_years):
-        energy_schedule.append(current_energy)
-        current_energy *= 0.999
+    # --- Simulate plant operation over the operational period ---
+    hours = operational_years * 365 * 24
+    timestamps = pd.date_range("2024-01-01", periods=hours, freq="H")
+    price_df = pd.DataFrame({"timestamp": timestamps, "price": electricity_price})
 
+    fuel_cost = params.get("fuel_cost_per_mwh", 0)
+    maintenance_days = params.get("maintenance_days", 30)
+
+    _, op_df = simulate_plant_operation(
+        price_df,
+        capacity_mw=capacity_mw,
+        fuel_cost_per_mwh=fuel_cost,
+        maintenance_days=maintenance_days,
+        capacity_factor=capacity_factor,
+        maintenance_interval_months=18,
+    )
+
+    op_df["year"] = op_df["timestamp"].dt.year
+    energy_by_year = op_df.groupby("year")["energy_mwh"].sum().tolist()
+    revenue_by_year = op_df.groupby("year")["revenue"].sum().tolist()
+
+    energy_schedule = [0] * construction_years
     revenue_schedule = [0] * construction_years
-    for energy in energy_schedule[construction_years:]:
-        revenue_schedule.append((energy * electricity_price) / 1_000_000)
+    degrade = 1.0
+    for e, r in zip(energy_by_year, revenue_by_year):
+        energy_schedule.append(e * degrade)
+        revenue_schedule.append((r * degrade) / 1_000_000)
+        degrade *= 0.999
 
     net_cash_flows = np.array(revenue_schedule) - (
         np.array(investment_schedule) + np.array(op_cost_schedule)
@@ -195,7 +222,8 @@ def run_example(params: dict) -> None:
         f"  - Total Lifecycle: {total_years} years ({construction_years} construction + {operational_years} operation)"
     )
     print(f"  - Total Investment: ${overnight_cost:,.0f} Million")
-    print(f"  - Annual Energy Output: {annual_energy:,.0f} MWh")
+    if energy_by_year:
+        print(f"  - First Year Energy Output: {energy_by_year[0]:,.0f} MWh")
 
     print("\n--- Model Results ---")
     lcoe_dollars = lcoe_result * 1_000_000
@@ -205,7 +233,7 @@ def run_example(params: dict) -> None:
 
     npv_result = calculate_npv(net_cash_flows, discount_rate)
     print(
-        f"\nNet Present Value (NPV) at a fixed price of ${electricity_price}/MWh: ${npv_result:,.2f} Million"
+        f"\nNet Present Value (NPV) using simulated operation: ${npv_result:,.2f} Million"
     )
     if npv_result > 0:
         print("The project is financially viable under these assumptions, as the NPV is positive.")
@@ -225,20 +253,10 @@ def run_example(params: dict) -> None:
         print("Discounted payback period was not reached within the project life.")
 
     print("\n--- Operational Simulation ---")
-    hours = 365 * 24
-    timestamps = pd.date_range("2024-01-01", periods=hours, freq="H")
-    price_df = pd.DataFrame({"timestamp": timestamps, "price": electricity_price})
-
-    fuel_cost = params.get("fuel_cost_per_mwh", 0)
-    maintenance_days = params.get("maintenance_days", 30)
-    profit, _ = simulate_plant_operation(
-        price_df,
-        capacity_mw=capacity_mw,
-        fuel_cost_per_mwh=fuel_cost,
-        maintenance_days=maintenance_days,
-        capacity_factor=capacity_factor,
+    total_profit = op_df["profit"].sum()
+    print(
+        f"Simulated total profit over {operational_years} years: ${total_profit:,.2f}"
     )
-    print(f"Simulated annual profit: ${profit:,.2f}")
 
 # --- Main execution block with an example scenario ---
 def main() -> None:
