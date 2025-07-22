@@ -289,8 +289,20 @@ def run_example(params: dict) -> None:
 
 # --- Main execution block with an example scenario ---
 def main() -> None:
-    params_path = Path(__file__).resolve().parent / "example_plant.json"
-    params = load_parameters(params_path)
+    """Run the financial model using parameters from a JSON file."""
+    import argparse
+
+    default_path = Path(__file__).resolve().parent / "example_plant.json"
+    parser = argparse.ArgumentParser(description="Run the nuclear plant model")
+    parser.add_argument(
+        "--params",
+        type=Path,
+        default=default_path,
+        help="Path to plant parameter JSON file",
+    )
+    args = parser.parse_args()
+
+    params = load_parameters(args.params)
     print("--- Financial Model for a Hypothetical Nuclear Power Plant ---")
     run_example(params)
 
