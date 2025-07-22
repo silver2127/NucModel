@@ -74,5 +74,4 @@ directory. Specify one with the `--params` flag:
 python plant.py --params plant_templates/vogtle.json
 ```
 
-Current templates include `vogtle.json`, `generic_pwr_1970s.json`, and
-`generic_smr.json` for comparing different plant designs.
+

@@ -1,0 +1,15 @@
+{
+  "construction_period_years": 6,
+  "operational_life_years": 60,
+  "discount_rate": 0.05,
+  "overnight_cost_usd_million": 7000,
+  "annual_operation_cost_usd_million": 450,
+  "op_cost_inflation": 0.015,
+  "decommissioning_cost_usd_million": 800,
+  "residual_value_usd_million": 0,
+  "plant_capacity_mw": 2800,
+  "capacity_factor": 0.92,
+  "electricity_price_usd_per_mwh": 55,
+  "fuel_cost_per_mwh": 6.5,
+  "maintenance_days": 28
+}
